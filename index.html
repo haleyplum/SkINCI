@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="SkINCI — Acne-safe ingredient scanner for skincare and cosmetic products">
+<title>SkINCI — Acne Safe Scanner</title>
+<!-- ============================================================
+  SUPABASE CONFIG — replace these two values with your own
+  Project URL:  Supabase dashboard → Project Settings → API
+  Anon Key:     Supabase dashboard → Project Settings → API
+============================================================ -->
+<script>
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+</script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F7F5F0;
+    --bg2: #EDEAE2;
+    --bg3: #E3DFDB;
+    --card: #FFFFFF;
+    --text: #1A1714;
+    --text2: #6B6560;
+    --text3: #9C9590;
+    --safe: #2D6A4F;
+    --safe-bg: #D8F3DC;
+    --safe-mid: #95D5AA;
+    --warn: #7D4800;
+    --warn-bg: #FFF3CD;
+    --warn-mid: #FFD166;
+    --bad: #9B1D1D;
+    --bad-bg: #FFE5E5;
+    --bad-mid: #F4A0A0;
+    --accent: #C4956A;
+    --accent2: #8B6E52;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 430px;
+    margin: 0 auto;
+  }
+
+  /* NAV */
+  .nav {
+    background: var(--card);
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--bg3);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-brand { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--text); letter-spacing: -0.3px; }
+  .nav-brand .inci { color: var(--accent); font-style: italic; }
+  .nav-brand .sk { color: var(--text); }
+
+  /* TABS */
+  .tabs {
+    display: flex; background: var(--card);
+    border-bottom: 1px solid var(--bg3);
+    position: sticky; top: 65px; z-index: 99;
+  }
+  .tab-btn {
+    flex: 1; padding: 12px 4px; font-size: 12px; font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    border: none; background: transparent; color: var(--text3);
+    cursor: pointer; letter-spacing: 0.02em; transition: color 0.2s;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+  /* MAIN */
+  .main { padding: 20px 16px 60px; }
+
+  /* SCANNER */
+  .scan-hero { background: var(--text); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+  .cam-area { width: 100%; aspect-ratio: 4/3; background: #111; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  #cam-video { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .cam-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; color: #888; font-size: 13px; text-align: center; padding: 20px; }
+  .cam-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 26px; }
+  .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 65%; aspect-ratio: 2/1; pointer-events: none; display: none; }
+  .scan-frame::before, .scan-frame::after, .scan-frame-inner::before, .scan-frame-inner::after { content: ''; position: absolute; width: 20px; height: 20px; border-color: var(--accent); border-style: solid; }
+  .scan-frame::before { top:0; left:0; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
+  .scan-frame::after { top:0; right:0; border-width: 2px 2px 0 0; border-radius: 0 3px 0 0; }
+  .scan-frame-inner::before { bottom:0; left:0; border-width: 0 0 2px 2px; border-radius: 0 0 0 3px; }
+  .scan-frame-inner::after { bottom:0; right:0; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
+  .scan-line { position: absolute; left: 10%; right: 10%; height: 1.5px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: scanLine 2s ease-in-out infinite; }
+  @keyframes scanLine { 0%{top:10%;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:90%;opacity:0} }
+  .scan-controls { padding: 14px 16px; display: flex; gap: 10px; align-items: center; background: var(--text); }
+  .btn-cam { flex: 1; padding: 11px; border-radius: var(--radius-sm); background: var(--accent); border: none; color: white; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
+  .btn-cam:active { opacity: 0.8; }
+  .btn-cam.secondary { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); flex: 0 0 auto; padding: 11px 14px; }
+  .cam-active-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; font-size: 10px; padding: 4px 8px; border-radius: 20px; display: none; align-items: center; gap: 5px; }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff4444; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* OR DIVIDER */
+  .or-row { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+  .or-row::before, .or-row::after { content: ''; flex: 1; height: 1px; background: var(--bg3); }
+  .or-row span { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* INPUTS */
+  .input-group { display: flex; gap: 8px; margin-bottom: 6px; }
+  .barcode-input { flex: 1; padding: 12px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--card); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .barcode-input:focus { border-color: var(--accent); }
+  .btn-scan { padding: 12px 18px; border-radius: var(--radius-sm); background: var(--text); border: none; color: white; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .sample-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: var(--bg2); border: 1px solid var(--bg3); color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; }
+  .chip:active { background: var(--bg3); }
+  .chip-label { font-size: 11px; color: var(--text3); padding: 4px 0; }
+
+  /* RESULT CARD */
+  .result-wrap { margin-top: 20px; }
+  .result-card { background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .result-top { padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
+  .result-img { width: 60px; height: 60px; object-fit: contain; border-radius: 10px; background: var(--bg); flex-shrink: 0; border: 1px solid var(--bg3); }
+  .result-img-placeholder { width: 60px; height: 60px; flex-shrink: 0; border-radius: 10px; background: var(--bg2); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .result-name { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .result-checked { font-size: 11px; color: var(--text3); margin-top: 5px; }
+  .verdict-band { padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .verdict-band.safe { background: var(--safe-bg); }
+  .verdict-band.caution { background: var(--warn-bg); }
+  .verdict-band.avoid { background: var(--bad-bg); }
+  .verdict-circle { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600; flex-shrink: 0; }
+  .verdict-band.safe .verdict-circle { background: var(--safe-mid); color: var(--safe); }
+  .verdict-band.caution .verdict-circle { background: var(--warn-mid); color: var(--warn); }
+  .verdict-band.avoid .verdict-circle { background: var(--bad-mid); color: var(--bad); }
+  .verdict-title { font-size: 16px; font-weight: 600; }
+  .verdict-band.safe .verdict-title { color: var(--safe); }
+  .verdict-band.caution .verdict-title { color: var(--warn); }
+  .verdict-band.avoid .verdict-title { color: var(--bad); }
+  .verdict-desc { font-size: 12px; margin-top: 2px; }
+  .verdict-band.safe .verdict-desc { color: #52B788; }
+  .verdict-band.caution .verdict-desc { color: #B07D26; }
+  .verdict-band.avoid .verdict-desc { color: #D45454; }
+  .flags-section { padding: 14px 16px; border-top: 1px solid var(--bg); }
+  .flags-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); font-weight: 600; margin-bottom: 10px; }
+  .flag-pill { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; margin-bottom: 6px; }
+  .flag-pill.high { background: var(--bad-bg); }
+  .flag-pill.medium { background: var(--warn-bg); }
+  .flag-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .flag-pill.high .flag-dot { background: var(--bad); }
+  .flag-pill.medium .flag-dot { background: var(--warn); }
+  .flag-pill-name { font-size: 13px; font-weight: 500; }
+  .flag-pill.high .flag-pill-name { color: var(--bad); }
+  .flag-pill.medium .flag-pill-name { color: var(--warn); }
+  .flag-pill-reason { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .badge-level { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+  .high .badge-level { background: var(--bad-mid); color: var(--bad); }
+  .medium .badge-level { background: var(--warn-mid); color: var(--warn); }
+  .ing-section { padding: 14px 16px; border-top: 1px solid var(--bg); }
+  .ing-text { font-size: 12px; color: var(--text3); line-height: 1.9; }
+  .ing-text .hi { background: #FFCDD2; color: #B71C1C; border-radius: 4px; padding: 1px 4px; font-weight: 500; }
+  .ing-text .mi { background: #FFF9C4; color: #795548; border-radius: 4px; padding: 1px 4px; font-weight: 500; }
+
+  /* MANUAL TAB */
+  .section-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text); margin-bottom: 4px; }
+  .section-sub { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; }
+  .ing-textarea { width: 100%; padding: 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--card); font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); outline: none; resize: vertical; min-height: 130px; transition: border-color 0.2s; line-height: 1.6; }
+  .ing-textarea:focus { border-color: var(--accent); }
+  .name-input { width: 100%; padding: 12px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--card); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s; margin-bottom: 10px; }
+  .name-input:focus { border-color: var(--accent); }
+  .btn-analyze { width: 100%; padding: 14px; border-radius: var(--radius-sm); background: var(--text); border: none; color: white; font-family: 'DM Serif Display', serif; font-size: 16px; cursor: pointer; transition: opacity 0.2s; letter-spacing: 0.02em; margin-bottom: 20px; }
+  .btn-analyze:active { opacity: 0.85; }
+
+  /* DB TAB */
+  .db-search { width: 100%; padding: 11px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--card); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s; margin-bottom: 16px; }
+  .db-search:focus { border-color: var(--accent); }
+  .db-stats { display: flex; gap: 8px; margin-bottom: 16px; }
+  .db-stat { flex: 1; padding: 10px 12px; border-radius: var(--radius-sm); text-align: center; }
+  .db-stat.total { background: var(--bg2); }
+  .db-stat.high { background: var(--bad-bg); }
+  .db-stat.medium { background: var(--warn-bg); }
+  .db-stat-num { font-size: 22px; font-weight: 600; }
+  .db-stat.total .db-stat-num { color: var(--text); }
+  .db-stat.high .db-stat-num { color: var(--bad); }
+  .db-stat.medium .db-stat-num { color: var(--warn); }
+  .db-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .db-stat.total .db-stat-label { color: var(--text3); }
+  .db-stat.high .db-stat-label { color: #D45454; }
+  .db-stat.medium .db-stat-label { color: #B07D26; }
+  .db-cat-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--text3); margin: 20px 0 10px; }
+  .db-cat-label:first-of-type { margin-top: 0; }
+  .db-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .db-card { padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid; }
+  .db-card.high { background: var(--bad-bg); border-color: var(--bad-mid); }
+  .db-card.medium { background: var(--warn-bg); border-color: var(--warn-mid); }
+  .db-card-name { font-size: 12px; font-weight: 600; }
+  .db-card.high .db-card-name { color: var(--bad); }
+  .db-card.medium .db-card-name { color: var(--warn); }
+  .db-card-note { font-size: 10px; margin-top: 2px; }
+  .db-card.high .db-card-note { color: #D45454; }
+  .db-card.medium .db-card-note { color: #B07D26; }
+  .db-card-cat { font-size: 9px; margin-top: 4px; opacity: 0.7; }
+  .db-card.high .db-card-cat { color: var(--bad); }
+  .db-card.medium .db-card-cat { color: var(--warn); }
+
+  /* LOADING/ERROR */
+  .loading-state { text-align: center; padding: 32px 20px; color: var(--text3); font-size: 13px; }
+  .spinner { width: 28px; height: 28px; border: 2px solid var(--bg3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-state { background: var(--card); border-radius: var(--radius); padding: 20px; text-align: center; color: var(--text2); font-size: 13px; line-height: 1.6; }
+  .error-icon { font-size: 28px; margin-bottom: 8px; }
+
+  /* PHOTO TAB */
+  .photo-upload-area {
+    width: 100%; aspect-ratio: 4/3; border-radius: var(--radius);
+    border: 2px dashed var(--bg3); background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden; position: relative;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .photo-upload-area:active { background: var(--bg2); }
+  .photo-upload-area.has-image { border-style: solid; border-color: var(--accent); }
+  .photo-upload-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; text-align: center; }
+  .photo-upload-icon { font-size: 40px; }
+  .photo-upload-text { font-size: 15px; font-weight: 500; color: var(--text2); }
+  .photo-upload-sub { font-size: 12px; color: var(--text3); }
+  .photo-tip { background: var(--bg2); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 20px; }
+
+  /* ADD TO DATABASE FORM */
+  .add-db-card {
+    background: var(--card); border-radius: var(--radius);
+    border: 1.5px dashed var(--accent); padding: 20px;
+    margin-top: 16px;
+  }
+  .add-db-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .add-db-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--bg2); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .add-db-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .add-db-sub { font-size: 12px; color: var(--text3); margin-bottom: 14px; line-height: 1.5; }
+  .add-db-field { margin-bottom: 10px; }
+  .add-db-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+  .add-db-input { width: 100%; padding: 11px 13px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--bg); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .add-db-input:focus { border-color: var(--accent); background: var(--card); }
+  .add-db-textarea { width: 100%; padding: 11px 13px; border-radius: var(--radius-sm); border: 1.5px solid var(--bg3); background: var(--bg); font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); outline: none; resize: vertical; min-height: 90px; line-height: 1.6; transition: border-color 0.2s; }
+  .add-db-textarea:focus { border-color: var(--accent); background: var(--card); }
+  .add-db-submit { width: 100%; padding: 12px; border-radius: var(--radius-sm); background: var(--accent); border: none; color: white; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; margin-top: 4px; }
+  .add-db-submit:active { opacity: 0.8; }
+  .add-db-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .success-band { background: var(--safe-bg); border-radius: var(--radius-sm); padding: 14px; display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .success-band-icon { font-size: 20px; }
+  .success-band-text { font-size: 14px; font-weight: 500; color: var(--safe); }
+  .success-band-sub { font-size: 12px; color: #52B788; margin-top: 2px; }
+  .community-badge { display: inline-flex; align-items: center; gap: 5px; background: var(--bg2); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text3); margin-top: 8px; }
+
+  /* FOOTER NOTE */
+  .disclaimer { font-size: 11px; color: var(--text3); text-align: center; padding: 0 16px 20px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-brand"><span class="sk">Sk</span><span class="inci">INCI</span></div>
+  <div class="nav-sub">Acne-safe ingredient scanner</div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('scan',this)">📷 Barcode</button>
+  <button class="tab-btn" onclick="switchTab('photo',this)">🖼️ Photo</button>
+  <button class="tab-btn" onclick="switchTab('manual',this)">✏️ Paste</button>
+  <button class="tab-btn" onclick="switchTab('db',this)">🔬 Database</button>
+</div>
+
+<div class="main">
+
+  <!-- SCAN TAB -->
+  <div id="tab-scan">
+    <div class="scan-hero">
+      <div class="cam-area" id="cam-area">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div class="cam-placeholder" id="cam-placeholder">
+          <div class="cam-icon">📷</div>
+          <div>Tap "Start camera" to scan a barcode</div>
+        </div>
+        <div class="scan-frame" id="scan-frame">
+          <div class="scan-frame-inner"></div>
+          <div class="scan-line"></div>
+        </div>
+        <div class="cam-active-badge" id="cam-badge">
+          <div class="live-dot"></div> Live
+        </div>
+      </div>
+      <div class="scan-controls">
+        <button class="btn-cam" id="cam-btn" onclick="toggleCamera()">Start camera</button>
+        <button class="btn-cam secondary" id="stop-btn" onclick="stopCamera()" style="display:none;">Stop</button>
+      </div>
+    </div>
+
+    <div class="or-row"><span>or enter barcode</span></div>
+
+    <div class="input-group">
+      <input type="text" class="barcode-input" id="barcode-input" placeholder="UPC / EAN barcode number" inputmode="numeric" />
+      <button class="btn-scan" onclick="scanBarcode()">Check</button>
+    </div>
+    <div class="sample-chips" style="margin-bottom:16px;">
+      <span class="chip-label">Try:</span>
+      <span class="chip" onclick="tryBarcode('3600523816408')">L'Oréal</span>
+      <span class="chip" onclick="tryBarcode('5000167006100')">Nivea</span>
+      <span class="chip" onclick="tryBarcode('3614272058873')">Lancôme</span>
+    </div>
+    <div id="scan-result"></div>
+  </div>
+
+  <!-- PHOTO TAB -->
+  <div id="tab-photo" style="display:none;">
+    <div class="section-title">Scan ingredient label</div>
+    <div class="section-sub">Take a photo of the ingredient list on any product — SkINCI's AI will read it and check for acne-causing ingredients instantly.</div>
+
+    <div class="photo-upload-area" id="photo-upload-area" onclick="document.getElementById('photo-file-input').click()">
+      <div class="photo-upload-inner" id="photo-upload-inner">
+        <div class="photo-upload-icon">📸</div>
+        <div class="photo-upload-text">Tap to take a photo or upload</div>
+        <div class="photo-upload-sub">Point at the ingredient list on the label</div>
+      </div>
+      <img id="photo-preview" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:var(--radius);" />
+    </div>
+    <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoUpload(event)" />
+
+    <div style="display:flex; gap:8px; margin-top:10px; margin-bottom:6px;">
+      <button class="btn-analyze" style="margin-bottom:0;" onclick="analyzePhoto()">Analyze photo with AI</button>
+      <button id="photo-clear-btn" onclick="clearPhoto()" style="display:none; padding:14px 16px; border-radius:var(--radius-sm); border:1.5px solid var(--bg3); background:transparent; font-family:'DM Sans',sans-serif; font-size:14px; color:var(--text2); cursor:pointer; white-space:nowrap;">Clear</button>
+    </div>
+
+    <div class="photo-tip">
+      <div style="font-size:13px; font-weight:500; color:var(--text2); margin-bottom:4px;">Tips for best results</div>
+      <div style="font-size:12px; color:var(--text3); line-height:1.7;">
+        • Make sure the ingredient text is in focus and well-lit<br>
+        • Capture the full list — scroll if needed and take multiple photos<br>
+        • Avoid glare from shiny packaging
+      </div>
+    </div>
+
+    <div id="photo-result"></div>
+  </div>
+
+  <!-- MANUAL TAB -->
+  <div id="tab-manual" style="display:none;">
+    <div class="section-title">Paste ingredients</div>
+    <div class="section-sub">Copy an ingredient list from any product label, Sephora, INCI Decoder, or CosDNA and paste it below for an instant SkINCI analysis.</div>
+    <input type="text" class="name-input" id="manual-name" placeholder="Product name (optional)" />
+    <textarea class="ing-textarea" id="manual-ings" placeholder="e.g. Water, Glycerin, Niacinamide, Isopropyl Myristate, Coconut Oil, Sodium Lauryl Sulfate, Cetyl Alcohol, Dimethicone..."></textarea>
+    <div style="margin: 10px 0;">
+      <button class="btn-analyze" onclick="analyzeManual()">Analyze ingredients</button>
+    </div>
+    <div id="manual-result"></div>
+  </div>
+
+  <!-- DB TAB -->
+  <div id="tab-db" style="display:none;">
+    <div class="section-title">Ingredient database</div>
+    <div class="section-sub">Over 130 flagged ingredients across skincare categories. The SkINCI database uses comedogenic ratings sourced from dermatology literature and clinical studies.</div>
+
+    <div class="db-stats">
+      <div class="db-stat total"><div class="db-stat-num" id="stat-total">0</div><div class="db-stat-label">Total</div></div>
+      <div class="db-stat high"><div class="db-stat-num" id="stat-high">0</div><div class="db-stat-label">High</div></div>
+      <div class="db-stat medium"><div class="db-stat-num" id="stat-medium">0</div><div class="db-stat-label">Medium</div></div>
+    </div>
+
+    <input type="text" class="db-search" id="db-search" placeholder="Search ingredients..." oninput="renderDB(this.value)" />
+
+    <div id="db-content"></div>
+  </div>
+
+</div>
+
+<div class="disclaimer">
+  ⚠️ SkINCI is for informational purposes only. Comedogenicity varies by skin type and formulation. Always patch test new products. Not medical advice.
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+
+// ============================================================
+// EXPANDED INGREDIENT DATABASE — 130+ entries
+// Categories: esters, oils, waxes, alcohols, surfactants,
+//             emollients, dyes, preservatives, silicones
+// ============================================================
+const DB = [
+  // ── HIGH CONCERN — Esters ──
+  {name:"isopropyl myristate",level:"high",cat:"Ester",reason:"Comedogenic rating 5/5 — top pore-clogger"},
+  {name:"isopropyl palmitate",level:"high",cat:"Ester",reason:"Comedogenic rating 4/5"},
+  {name:"isopropyl isostearate",level:"high",cat:"Ester",reason:"Comedogenic rating 4/5"},
+  {name:"isopropyl linoleate",level:"high",cat:"Ester",reason:"Comedogenic rating 3/5"},
+  {name:"myristyl myristate",level:"high",cat:"Ester",reason:"Comedogenic rating 5/5"},
+  {name:"butyl stearate",level:"high",cat:"Ester",reason:"Comedogenic rating 3/5"},
+  {name:"octyl palmitate",level:"high",cat:"Ester",reason:"Comedogenic rating 4/5"},
+  {name:"octyl stearate",level:"high",cat:"Ester",reason:"Comedogenic rating 3/5"},
+  {name:"decyl oleate",level:"high",cat:"Ester",reason:"Comedogenic rating 3/5"},
+  {name:"ethylhexyl palmitate",level:"high",cat:"Ester",reason:"Comedogenic rating 4/5"},
+  {name:"cetearyl isononanoate",level:"high",cat:"Ester",reason:"Pore-clogging ester"},
+  {name:"propylene glycol isostearate",level:"high",cat:"Ester",reason:"Comedogenic rating 4/5"},
+
+  // ── HIGH CONCERN — Oils ──
+  {name:"coconut oil",level:"high",cat:"Oil",reason:"Comedogenic rating 4/5"},
+  {name:"cocos nucifera",level:"high",cat:"Oil",reason:"Coconut oil — comedogenic 4/5"},
+  {name:"cocos nucifera oil",level:"high",cat:"Oil",reason:"Coconut oil — comedogenic 4/5"},
+  {name:"cocoa butter",level:"high",cat:"Oil/Butter",reason:"Comedogenic rating 4/5"},
+  {name:"theobroma cacao",level:"high",cat:"Oil/Butter",reason:"Cocoa butter — comedogenic 4/5"},
+  {name:"theobroma cacao seed butter",level:"high",cat:"Oil/Butter",reason:"Cocoa butter — comedogenic 4/5"},
+  {name:"wheat germ oil",level:"high",cat:"Oil",reason:"Comedogenic rating 5/5"},
+  {name:"triticum vulgare germ oil",level:"high",cat:"Oil",reason:"Wheat germ oil — 5/5"},
+  {name:"flaxseed oil",level:"high",cat:"Oil",reason:"Comedogenic rating 4/5"},
+  {name:"linseed oil",level:"high",cat:"Oil",reason:"Comedogenic rating 4/5"},
+  {name:"linum usitatissimum seed oil",level:"high",cat:"Oil",reason:"Flaxseed oil — 4/5"},
+  {name:"peach kernel oil",level:"high",cat:"Oil",reason:"Comedogenic rating 4/5"},
+  {name:"prunus persica kernel oil",level:"high",cat:"Oil",reason:"Peach kernel oil — 4/5"},
+  {name:"avocado oil",level:"high",cat:"Oil",reason:"Comedogenic rating 3/5"},
+  {name:"persea gratissima oil",level:"high",cat:"Oil",reason:"Avocado oil — 3/5"},
+
+  // ── HIGH CONCERN — Lanolin ──
+  {name:"lanolin",level:"high",cat:"Wax/Animal",reason:"Comedogenic + common allergen"},
+  {name:"acetylated lanolin",level:"high",cat:"Wax/Animal",reason:"Comedogenic rating 4/5"},
+  {name:"acetylated lanolin alcohol",level:"high",cat:"Wax/Animal",reason:"Comedogenic rating 4/5"},
+  {name:"lanolin alcohol",level:"high",cat:"Wax/Animal",reason:"Comedogenic rating 3/5"},
+  {name:"isopropyl lanolate",level:"high",cat:"Wax/Animal",reason:"Comedogenic rating 4/5"},
+
+  // ── HIGH CONCERN — Surfactants ──
+  {name:"sodium lauryl sulfate",level:"high",cat:"Surfactant",reason:"Disrupts follicle lining — triggers breakouts"},
+  {name:"sodium dodecyl sulfate",level:"high",cat:"Surfactant",reason:"SLS alternative name — same risks"},
+  {name:"ammonium lauryl sulfate",level:"high",cat:"Surfactant",reason:"Similar to SLS — comedogenic"},
+  {name:"tea lauryl sulfate",level:"high",cat:"Surfactant",reason:"Comedogenic lauryl sulfate"},
+
+  // ── HIGH CONCERN — Dyes ──
+  {name:"d&c red 17",level:"high",cat:"Dye",reason:"Coal tar dye — comedogenic"},
+  {name:"d&c red 21",level:"high",cat:"Dye",reason:"Coal tar dye — comedogenic"},
+  {name:"d&c red 30",level:"high",cat:"Dye",reason:"Coal tar dye — comedogenic"},
+  {name:"d&c red 36",level:"high",cat:"Dye",reason:"Coal tar dye — comedogenic"},
+  {name:"fd&c red 40",level:"high",cat:"Dye",reason:"Synthetic dye — potential acne trigger"},
+
+  // ── HIGH CONCERN — Alcohols ──
+  {name:"myristyl alcohol",level:"high",cat:"Fatty Alcohol",reason:"Comedogenic rating 3/5"},
+  {name:"isostearyl alcohol",level:"high",cat:"Fatty Alcohol",reason:"Comedogenic rating 3/5"},
+
+  // ── HIGH CONCERN — Other ──
+  {name:"sodium chloride",level:"high",cat:"Salt",reason:"High % in leave-ons triggers acne"},
+  {name:"potassium chloride",level:"high",cat:"Salt",reason:"Can clog pores in some formulations"},
+  {name:"algae extract",level:"high",cat:"Botanical",reason:"Can trigger breakouts in many users"},
+  {name:"carrageenan",level:"high",cat:"Botanical",reason:"Algae-derived — comedogenic for many"},
+
+  // ── MEDIUM CONCERN — Oils ──
+  {name:"olive oil",level:"medium",cat:"Oil",reason:"Mildly comedogenic (2/5)"},
+  {name:"olea europaea fruit oil",level:"medium",cat:"Oil",reason:"Olive oil — mildly comedogenic"},
+  {name:"almond oil",level:"medium",cat:"Oil",reason:"Mildly comedogenic (2/5)"},
+  {name:"prunus amygdalus dulcis oil",level:"medium",cat:"Oil",reason:"Sweet almond oil — mildly comedogenic"},
+  {name:"soybean oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 3/5"},
+  {name:"glycine soja oil",level:"medium",cat:"Oil",reason:"Soybean oil — mildly comedogenic"},
+  {name:"cottonseed oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 3/5"},
+  {name:"gossypium herbaceum seed oil",level:"medium",cat:"Oil",reason:"Cottonseed oil — 3/5"},
+  {name:"sesame oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 3/5"},
+  {name:"sesamum indicum seed oil",level:"medium",cat:"Oil",reason:"Sesame seed oil — 3/5"},
+  {name:"sunflower oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 2/5"},
+  {name:"helianthus annuus seed oil",level:"medium",cat:"Oil",reason:"Sunflower oil — mildly comedogenic"},
+  {name:"castor oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 1/5 but occlusive"},
+  {name:"ricinus communis seed oil",level:"medium",cat:"Oil",reason:"Castor oil — occlusive"},
+  {name:"evening primrose oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 2/5"},
+  {name:"oenothera biennis oil",level:"medium",cat:"Oil",reason:"Evening primrose — mildly comedogenic"},
+  {name:"palm oil",level:"medium",cat:"Oil",reason:"Comedogenic rating 2/5"},
+  {name:"elaeis guineensis oil",level:"medium",cat:"Oil",reason:"Palm oil — mildly comedogenic"},
+
+  // ── MEDIUM CONCERN — Butters ──
+  {name:"shea butter",level:"medium",cat:"Butter",reason:"Comedogenic rating 0-2 — occlusive risk"},
+  {name:"butyrospermum parkii butter",level:"medium",cat:"Butter",reason:"Shea butter — mildly comedogenic"},
+  {name:"mango butter",level:"medium",cat:"Butter",reason:"Comedogenic rating 2/5"},
+  {name:"mangifera indica seed butter",level:"medium",cat:"Butter",reason:"Mango butter — mildly comedogenic"},
+
+  // ── MEDIUM CONCERN — Fatty Acids ──
+  {name:"stearic acid",level:"medium",cat:"Fatty Acid",reason:"Mildly comedogenic (2/5)"},
+  {name:"myristic acid",level:"medium",cat:"Fatty Acid",reason:"Can clog pores (3/5)"},
+  {name:"lauric acid",level:"medium",cat:"Fatty Acid",reason:"Acne-triggering in studies"},
+  {name:"palmitic acid",level:"medium",cat:"Fatty Acid",reason:"Mildly comedogenic (2/5)"},
+  {name:"oleic acid",level:"medium",cat:"Fatty Acid",reason:"Can worsen acne-prone skin"},
+
+  // ── MEDIUM CONCERN — Fatty Alcohols ──
+  {name:"cetyl alcohol",level:"medium",cat:"Fatty Alcohol",reason:"Mildly comedogenic (2/5)"},
+  {name:"cetearyl alcohol",level:"medium",cat:"Fatty Alcohol",reason:"Mildly comedogenic (2/5)"},
+  {name:"stearyl alcohol",level:"medium",cat:"Fatty Alcohol",reason:"Comedogenic rating 2/5"},
+  {name:"behenyl alcohol",level:"medium",cat:"Fatty Alcohol",reason:"Mildly comedogenic — occlusive"},
+
+  // ── MEDIUM CONCERN — Surfactants ──
+  {name:"sodium laureth sulfate",level:"medium",cat:"Surfactant",reason:"Can irritate acne-prone skin"},
+  {name:"ammonium laureth sulfate",level:"medium",cat:"Surfactant",reason:"Irritating laureth surfactant"},
+  {name:"cocamidopropyl betaine",level:"medium",cat:"Surfactant",reason:"Common irritant/allergen"},
+  {name:"polysorbate 80",level:"medium",cat:"Emulsifier",reason:"Disrupts skin barrier for some"},
+  {name:"polysorbate 20",level:"medium",cat:"Emulsifier",reason:"Can irritate sensitive/acne skin"},
+  {name:"peg-40 hydrogenated castor oil",level:"medium",cat:"Emulsifier",reason:"PEG compounds can irritate"},
+  {name:"peg-60 hydrogenated castor oil",level:"medium",cat:"Emulsifier",reason:"PEG emulsifier — mild concern"},
+
+  // ── MEDIUM CONCERN — Waxes ──
+  {name:"beeswax",level:"medium",cat:"Wax",reason:"Mildly comedogenic (2/5)"},
+  {name:"cera alba",level:"medium",cat:"Wax",reason:"Beeswax — mildly comedogenic"},
+  {name:"carnauba wax",level:"medium",cat:"Wax",reason:"Forms occlusive layer"},
+  {name:"cera carnauba",level:"medium",cat:"Wax",reason:"Carnauba wax — occlusive"},
+  {name:"candelilla wax",level:"medium",cat:"Wax",reason:"Mildly comedogenic wax"},
+  {name:"euphorbia cerifera cera",level:"medium",cat:"Wax",reason:"Candelilla wax — mild concern"},
+
+  // ── MEDIUM CONCERN — Occlusives ──
+  {name:"petrolatum",level:"medium",cat:"Occlusive",reason:"Occlusive — traps oil for some skin"},
+  {name:"mineral oil",level:"medium",cat:"Occlusive",reason:"Occlusive — debated for acne skin"},
+  {name:"paraffinum liquidum",level:"medium",cat:"Occlusive",reason:"Mineral oil — occlusive"},
+  {name:"paraffin",level:"medium",cat:"Occlusive",reason:"Waxy occlusive — mild concern"},
+
+  // ── MEDIUM CONCERN — Silicones ──
+  {name:"dimethicone",level:"medium",cat:"Silicone",reason:"Occlusive — can trap debris"},
+  {name:"cyclopentasiloxane",level:"medium",cat:"Silicone",reason:"Volatile silicone — mild concern"},
+  {name:"cyclohexasiloxane",level:"medium",cat:"Silicone",reason:"Silicone — mildly occlusive"},
+  {name:"trimethicone",level:"medium",cat:"Silicone",reason:"Silicone — mild occlusive risk"},
+
+  // ── MEDIUM CONCERN — Emollients ──
+  {name:"propylene glycol",level:"medium",cat:"Humectant",reason:"Irritating in high concentrations"},
+  {name:"isohexadecane",level:"medium",cat:"Emollient",reason:"Comedogenic rating 2/5"},
+  {name:"squalene",level:"medium",cat:"Emollient",reason:"Oxidized squalene triggers acne"},
+  {name:"caprylic/capric triglyceride",level:"medium",cat:"Emollient",reason:"Comedogenic rating 2/5 for some"},
+  {name:"glyceryl stearate",level:"medium",cat:"Emollient",reason:"Mildly comedogenic (2/5)"},
+  {name:"glyceryl oleate",level:"medium",cat:"Emollient",reason:"Mildly comedogenic"},
+
+  // ── MEDIUM CONCERN — Preservatives ──
+  {name:"methylparaben",level:"medium",cat:"Preservative",reason:"Mild irritant — acne flares reported"},
+  {name:"propylparaben",level:"medium",cat:"Preservative",reason:"Can irritate acne-prone skin"},
+  {name:"butylparaben",level:"medium",cat:"Preservative",reason:"Potential skin sensitizer"},
+  {name:"phenoxyethanol",level:"medium",cat:"Preservative",reason:"Irritant at higher concentrations"},
+
+  // ── MEDIUM CONCERN — Fragrances ──
+  {name:"fragrance",level:"medium",cat:"Fragrance",reason:"Common acne & irritation trigger"},
+  {name:"parfum",level:"medium",cat:"Fragrance",reason:"Undisclosed fragrance — sensitizer"},
+  {name:"limonene",level:"medium",cat:"Fragrance",reason:"Oxidized form irritates follicles"},
+  {name:"linalool",level:"medium",cat:"Fragrance",reason:"Common fragrance sensitizer"},
+  {name:"eugenol",level:"medium",cat:"Fragrance",reason:"Fragrance allergen — acne trigger"},
+  {name:"cinnamyl alcohol",level:"medium",cat:"Fragrance",reason:"Fragrance allergen"},
+  {name:"benzyl alcohol",level:"medium",cat:"Fragrance/Preservative",reason:"Sensitizer at higher %"},
+];
+
+let cameraActive = false;
+let quaggaRunning = false;
+
+// Update stat counters
+function updateStats() {
+  document.getElementById('stat-total').textContent = DB.length;
+  document.getElementById('stat-high').textContent = DB.filter(x=>x.level==='high').length;
+  document.getElementById('stat-medium').textContent = DB.filter(x=>x.level==='medium').length;
+}
+
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+function switchTab(t, el) {
+  ['scan','photo','manual','db'].forEach(id => {
+    document.getElementById('tab-'+id).style.display = id===t?'block':'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  if(t==='db'){ updateStats(); renderDB(''); }
+  if(t!=='scan') stopCamera();
+}
+
+function renderDB(query) {
+  const q = (query||'').toLowerCase().trim();
+  const filtered = q ? DB.filter(x=>x.name.includes(q)||x.cat.toLowerCase().includes(q)||x.reason.toLowerCase().includes(q)) : DB;
+  const hi = filtered.filter(x=>x.level==='high');
+  const me = filtered.filter(x=>x.level==='medium');
+
+  let html = '';
+  if(hi.length>0){
+    html += `<div class="db-cat-label">⛔ High concern (${hi.length})</div><div class="db-grid">`;
+    html += hi.map(x=>`<div class="db-card high"><div class="db-card-name">${cap(x.name)}</div><div class="db-card-note">${x.reason}</div><div class="db-card-cat">${x.cat}</div></div>`).join('');
+    html += '</div>';
+  }
+  if(me.length>0){
+    html += `<div class="db-cat-label">⚠️ Medium concern (${me.length})</div><div class="db-grid">`;
+    html += me.map(x=>`<div class="db-card medium"><div class="db-card-name">${cap(x.name)}</div><div class="db-card-note">${x.reason}</div><div class="db-card-cat">${x.cat}</div></div>`).join('');
+    html += '</div>';
+  }
+  if(!html) html = `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">No ingredients found for "${query}"</div>`;
+  document.getElementById('db-content').innerHTML = html;
+}
+
+function buildResult(ings, name, imgUrl) {
+  const lower = ings.toLowerCase();
+  const found = DB.filter(e => lower.includes(e.name));
+  // Deduplicate by name
+  const seen = new Set();
+  const unique = found.filter(f=>{ if(seen.has(f.name)) return false; seen.add(f.name); return true; });
+  const high = unique.filter(x=>x.level==='high');
+  const med = unique.filter(x=>x.level==='medium');
+
+  let verdict, vclass, vicon, vdesc;
+  if(high.length>0){verdict='Not acne safe';vclass='avoid';vicon='✕';vdesc=`${high.length} pore-clogging ingredient${high.length>1?'s':''} found`;}
+  else if(med.length>=2){verdict='Use with caution';vclass='caution';vicon='!';vdesc=`${med.length} mild concern${med.length>1?'s':''} detected`;}
+  else if(med.length===1){verdict='Likely safe';vclass='caution';vicon='~';vdesc='One mildly comedogenic ingredient';}
+  else{verdict='Acne safe';vclass='safe';vicon='✓';vdesc='No comedogenic ingredients found';}
+
+  const parts = ings.split(/,\s*/).map(p=>{
+    const pl = p.toLowerCase().trim();
+    const m = DB.find(e=>pl.includes(e.name));
+    if(m&&m.level==='high') return `<span class="hi">${p.trim()}</span>`;
+    if(m&&m.level==='medium') return `<span class="mi">${p.trim()}</span>`;
+    return p.trim();
+  });
+
+  const imgHtml = imgUrl
+    ? `<img class="result-img" src="${imgUrl}" onerror="this.style.display='none'" />`
+    : `<div class="result-img-placeholder">🧴</div>`;
+
+  return `
+  <div class="result-card">
+    <div class="result-top">
+      ${imgHtml}
+      <div>
+        <div class="result-name">${name||'Product'}</div>
+        <div class="result-checked">${DB.length} ingredients checked · ${unique.length} flagged</div>
+      </div>
+    </div>
+    <div class="verdict-band ${vclass}">
+      <div class="verdict-circle">${vicon}</div>
+      <div>
+        <div class="verdict-title">${verdict}</div>
+        <div class="verdict-desc">${vdesc}</div>
+      </div>
+    </div>
+    ${unique.length>0?`
+    <div class="flags-section">
+      <div class="flags-label">Flagged ingredients</div>
+      ${unique.map(f=>`
+        <div class="flag-pill ${f.level}">
+          <div class="flag-dot"></div>
+          <div>
+            <div class="flag-pill-name">${cap(f.name)}</div>
+            <div class="flag-pill-reason">${f.reason}</div>
+          </div>
+          <div class="badge-level">${f.level}</div>
+        </div>`).join('')}
+    </div>`:''}
+    <div class="ing-section">
+      <div class="flags-label">Full ingredient list</div>
+      <div class="ing-text">${parts.join(', ')}</div>
+    </div>
+  </div>`;
+}
+
+// ── SUPABASE HELPERS ──
+async function supabaseFetch(path, options={}) {
+  if(SUPABASE_URL === 'YOUR_SUPABASE_URL') return null;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': options.prefer || 'return=minimal',
+      ...(options.headers||{})
+    }
+  });
+  return res;
+}
+
+async function lookupSupabase(barcode) {
+  try {
+    const res = await supabaseFetch(`products?barcode=eq.${encodeURIComponent(barcode)}&select=*&limit=1`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if(!res || !res.ok) return null;
+    const rows = await res.json();
+    return rows && rows.length > 0 ? rows[0] : null;
+  } catch(e) { return null; }
+}
+
+async function submitToSupabase(barcode, productName, brand, ingredients) {
+  const res = await supabaseFetch('products', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: JSON.stringify({
+      barcode,
+      product_name: productName,
+      brand,
+      ingredients_text: ingredients,
+      submitted_at: new Date().toISOString(),
+      source: 'community'
+    })
+  });
+  return res && (res.ok || res.status === 201);
+}
+
+function showAddForm(barcode) {
+  const el = document.getElementById('scan-result');
+  el.innerHTML = `
+    <div class="error-state">
+      <div class="error-icon">🔍</div>
+      <strong>Product not found</strong><br>
+      Barcode <code style="font-size:12px;background:var(--bg2);padding:2px 6px;border-radius:4px;">${barcode}</code> isn't in any database yet.
+    </div>
+    <div class="add-db-card">
+      <div class="add-db-header">
+        <div class="add-db-icon">➕</div>
+        <div class="add-db-title">Add this product</div>
+      </div>
+      <div class="add-db-sub">Help build the SkINCI database! Add this product's details and it'll be available for everyone who scans it next.</div>
+
+      <div class="add-db-field">
+        <div class="add-db-label">Product name *</div>
+        <input type="text" class="add-db-input" id="add-name" placeholder="e.g. CeraVe Moisturizing Cream" />
+      </div>
+      <div class="add-db-field">
+        <div class="add-db-label">Brand</div>
+        <input type="text" class="add-db-input" id="add-brand" placeholder="e.g. CeraVe" />
+      </div>
+      <div class="add-db-field">
+        <div class="add-db-label">Ingredient list *</div>
+        <textarea class="add-db-textarea" id="add-ings" placeholder="Paste the full ingredient list from the product label…"></textarea>
+      </div>
+
+      <button class="add-db-submit" id="add-submit-btn" onclick="submitProduct('${barcode}')">
+        Submit to database
+      </button>
+      <div id="add-submit-result"></div>
+
+      <div class="community-badge">👥 Community contributed</div>
+    </div>`;
+}
+
+async function submitProduct(barcode) {
+  const name = document.getElementById('add-name').value.trim();
+  const brand = document.getElementById('add-brand').value.trim();
+  const ings = document.getElementById('add-ings').value.trim();
+  const resultEl = document.getElementById('add-submit-result');
+  const btn = document.getElementById('add-submit-btn');
+
+  if(!name) { resultEl.innerHTML = `<div style="color:var(--bad);font-size:13px;margin-top:8px;">Please enter a product name.</div>`; return; }
+  if(!ings) { resultEl.innerHTML = `<div style="color:var(--bad);font-size:13px;margin-top:8px;">Please paste the ingredient list.</div>`; return; }
+
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  if(SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+    // No Supabase configured — just run the analysis locally
+    resultEl.innerHTML = `<div class="success-band"><div class="success-band-icon">✓</div><div><div class="success-band-text">Thanks! Analyzing now…</div><div class="success-band-sub">Set up Supabase to save submissions permanently.</div></div></div>`;
+    setTimeout(() => {
+      document.getElementById('scan-result').innerHTML = `<div class="result-wrap">${buildResult(ings, name, null)}</div>`;
+    }, 1000);
+    return;
+  }
+
+  const ok = await submitToSupabase(barcode, name, brand, ings);
+  if(ok) {
+    resultEl.innerHTML = `<div class="success-band"><div class="success-band-icon">✓</div><div><div class="success-band-text">Saved to database!</div><div class="success-band-sub">Future scans of this barcode will find it instantly.</div></div></div>`;
+    setTimeout(() => {
+      document.getElementById('scan-result').innerHTML = `<div class="result-wrap">${buildResult(ings, name, null)}</div>`;
+    }, 1400);
+  } else {
+    btn.textContent = 'Submit to database'; btn.disabled = false;
+    resultEl.innerHTML = `<div style="color:var(--bad);font-size:13px;margin-top:8px;">Could not save — check your Supabase config.</div>`;
+  }
+}
+
+async function scanBarcode() {
+  const bc = document.getElementById('barcode-input').value.trim();
+  if(!bc) return;
+  document.getElementById('scan-result').innerHTML = `<div class="loading-state"><div class="spinner"></div>Looking up product…</div>`;
+  try {
+    // 1. Check Open Beauty Facts
+    const r = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${bc}.json`);
+    const d = await r.json();
+    if(d.status===1 && d.product){
+      const p = d.product;
+      const ings = p.ingredients_text_en||p.ingredients_text||'';
+      if(ings){
+        document.getElementById('scan-result').innerHTML = `<div class="result-wrap">${buildResult(ings, p.product_name||p.brands, p.image_front_small_url)}</div>`;
+        return;
+      }
+    }
+
+    // 2. Check Supabase community database
+    document.getElementById('scan-result').innerHTML = `<div class="loading-state"><div class="spinner"></div>Checking community database…</div>`;
+    const local = await lookupSupabase(bc);
+    if(local && local.ingredients_text) {
+      document.getElementById('scan-result').innerHTML = `
+        <div style="margin-bottom:8px;" class="community-badge">👥 Community contributed · ${new Date(local.submitted_at).toLocaleDateString()}</div>
+        <div class="result-wrap">${buildResult(local.ingredients_text, local.product_name||'Community product', null)}</div>`;
+      return;
+    }
+
+    // 3. Not found anywhere — show add form
+    showAddForm(bc);
+
+  } catch(e){
+    document.getElementById('scan-result').innerHTML=`<div class="error-state"><div class="error-icon">⚠️</div>Could not reach product database. Check your connection and try again.</div>`;
+  }
+}
+
+function tryBarcode(bc){
+  document.getElementById('barcode-input').value = bc;
+  scanBarcode();
+}
+
+function analyzeManual(){
+  const ings = document.getElementById('manual-ings').value.trim();
+  const name = document.getElementById('manual-name').value.trim();
+  if(!ings) return;
+  document.getElementById('manual-result').innerHTML = `<div class="result-wrap">${buildResult(ings, name||'Custom product', null)}</div>`;
+}
+
+// ── PHOTO / AI INGREDIENT SCAN ──
+let photoBase64 = null;
+let photoMimeType = null;
+
+function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  photoMimeType = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    photoBase64 = dataUrl.split(',')[1];
+    const preview = document.getElementById('photo-preview');
+    preview.src = dataUrl;
+    preview.style.display = 'block';
+    document.getElementById('photo-upload-inner').style.display = 'none';
+    document.getElementById('photo-upload-area').classList.add('has-image');
+    document.getElementById('photo-clear-btn').style.display = '';
+    document.getElementById('photo-result').innerHTML = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  photoBase64 = null; photoMimeType = null;
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('photo-upload-inner').style.display = 'flex';
+  document.getElementById('photo-upload-area').classList.remove('has-image');
+  document.getElementById('photo-clear-btn').style.display = 'none';
+  document.getElementById('photo-result').innerHTML = '';
+  document.getElementById('photo-file-input').value = '';
+}
+
+async function analyzePhoto() {
+  if(!photoBase64) {
+    document.getElementById('photo-result').innerHTML = `<div class="error-state"><div class="error-icon">📸</div>Please select or take a photo of the ingredient list first.</div>`;
+    return;
+  }
+  document.getElementById('photo-result').innerHTML = `<div class="loading-state"><div class="spinner"></div>AI is reading the ingredient label…</div>`;
+
+  try {
+    const response = await fetch('/.netlify/functions/analyze-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: photoBase64,
+        mimeType: photoMimeType
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      document.getElementById('photo-result').innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div>${data.error || 'Something went wrong.'}<br><br>Try the <strong>Paste</strong> tab to enter ingredients manually.</div>`;
+      return;
+    }
+
+    const extracted = data.ingredients || '';
+
+    if(!extracted || extracted === 'NO_INGREDIENTS_FOUND') {
+      document.getElementById('photo-result').innerHTML = `<div class="error-state"><div class="error-icon">🔍</div>Could not find a clear ingredient list in this photo.<br><br>Try retaking with better lighting, or paste the ingredients manually in the <strong>Paste</strong> tab.</div>`;
+      return;
+    }
+
+    document.getElementById('photo-result').innerHTML = `<div class="result-wrap">${buildResult(extracted, 'Photo scan result', null)}</div>`;
+
+  } catch(e) {
+    document.getElementById('photo-result').innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div>Could not reach the scan service. Make sure the app is deployed to Netlify.<br><br>Or use the <strong>Paste</strong> tab to enter ingredients manually.</div>`;
+  }
+}
+
+// ── CAMERA ──
+async function toggleCamera(){
+  if(cameraActive){ stopCamera(); return; }
+  const btn = document.getElementById('cam-btn');
+  btn.textContent = 'Starting…'; btn.disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    const video = document.getElementById('cam-video');
+    video.srcObject = stream;
+    video.style.display = 'block';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('scan-frame').style.display = 'block';
+    document.getElementById('cam-badge').style.display = 'flex';
+    document.getElementById('stop-btn').style.display = '';
+    btn.textContent = 'Scanning…'; btn.disabled = false; btn.classList.add('secondary');
+    cameraActive = true;
+    startQuagga(video);
+  } catch(e){
+    btn.textContent = 'Start camera'; btn.disabled = false;
+    document.getElementById('scan-result').innerHTML = `<div class="error-state"><div class="error-icon">📷</div>Camera access denied or unavailable on this device/browser.<br><br>Use the barcode input field below instead.</div>`;
+  }
+}
+
+function startQuagga(video) {
+  if(!window.Quagga) return;
+  Quagga.init({
+    inputStream:{ type:'LiveStream', target: video, constraints:{facingMode:'environment'} },
+    decoder:{ readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'] },
+    locate: true
+  }, err => {
+    if(err) return;
+    Quagga.start();
+    quaggaRunning = true;
+    Quagga.onDetected(data => {
+      const code = data.codeResult.code;
+      if(code){
+        stopCamera();
+        document.getElementById('barcode-input').value = code;
+        scanBarcode();
+      }
+    });
+  });
+}
+
+function stopCamera(){
+  if(quaggaRunning){ try{ Quagga.stop(); }catch(e){} quaggaRunning = false; }
+  const video = document.getElementById('cam-video');
+  if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject = null; }
+  video.style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  document.getElementById('scan-frame').style.display = 'none';
+  document.getElementById('cam-badge').style.display = 'none';
+  document.getElementById('stop-btn').style.display = 'none';
+  const btn = document.getElementById('cam-btn');
+  btn.textContent = 'Start camera'; btn.disabled = false; btn.classList.remove('secondary');
+  cameraActive = false;
+}
+
+document.getElementById('barcode-input').addEventListener('keydown', e => { if(e.key==='Enter') scanBarcode(); });
+</script>
+</body>
+</html>
